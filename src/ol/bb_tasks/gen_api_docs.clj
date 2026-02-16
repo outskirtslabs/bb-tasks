@@ -14,6 +14,7 @@
                 :git-branch \"main\"})"
   (:require [babashka.pods :as pods]
             [babashka.fs :as fs]
+            [babashka.process :as p]
             [clojure.edn :as edn]
             [clojure.string :as str]))
 
@@ -353,29 +354,31 @@
 
 ;; -- Public API ---------------------------------------------------------------
 
+(defn- current-git-branch
+  "Detect the current git branch name."
+  []
+  (str/trim (:out (p/shell {:out :string} "git rev-parse --abbrev-ref HEAD"))))
+
 (defn generate!
   "Generate AsciiDoc API reference pages from Clojure source.
 
   opts is a map with keys:
-    :project-root      -- absolute path to the project root
-    :source-paths      -- vector of source paths relative to project-root
+    :project-root      -- absolute path to the project root (default \".\")
+    :source-paths      -- vector of source paths relative to project-root (default [\"src\"])
     :antora-start-path -- path to the Antora component root (e.g. \"doc\")
     :github-repo       -- GitHub repo URL (e.g. \"https://github.com/org/repo\")
-    :git-branch        -- git branch for source links (e.g. \"main\")"
+    :git-branch        -- git branch for source links (auto-detected if omitted)"
   [opts]
-  (assert (:project-root opts) ":project-root is required")
-  (assert (:source-paths opts) ":source-paths is required")
   (assert (:antora-start-path opts) ":antora-start-path is required")
   (assert (:github-repo opts) ":github-repo is required")
-  (assert (:git-branch opts) ":git-branch is required")
 
-  (let [project-root (str (fs/absolutize (:project-root opts)))
-        source-paths (mapv #(str (fs/path project-root %)) (:source-paths opts))
+  (let [project-root (str (fs/absolutize (or (:project-root opts) ".")))
+        source-paths (mapv #(str (fs/path project-root %)) (or (:source-paths opts) ["src"]))
         antora-module-root (str (fs/path project-root (:antora-start-path opts) "modules" "ROOT"))
         pages-dir (str (fs/path antora-module-root "pages" "api"))
         partials-dir (str (fs/path antora-module-root "partials"))
         github-repo (:github-repo opts)
-        git-branch (:git-branch opts)]
+        git-branch (or (:git-branch opts) (current-git-branch))]
 
     (println "Analyzing" (str/join ", " source-paths) "...")
 
