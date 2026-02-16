@@ -1,0 +1,7 @@
+{:paths ["src"]
+ :deps {local/deps {:local/root "."}}
+ :pods {clj-kondo/clj-kondo {:version "2026.01.19"}}
+ :tasks
+ {gen-api-docs
+  {:doc "Generate AsciiDoc API docs. Pass EDN opts string as argument."
+   :task ol.bb-tasks.gen-api-docs/-main}}}
