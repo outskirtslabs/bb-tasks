@@ -3,10 +3,10 @@
 
   Produces one .adoc page per public namespace and a nav partial for Antora.
 
-  Usage as a babashka task:
-    bb gen-api-docs '{:project-root \"/path/to/project\" ...}'
+  All options have smart defaults -- in most cases no arguments are needed:
+    (generate! {})
 
-  Or programmatically:
+  Or with explicit overrides:
     (generate! {:project-root \"/path/to/project\"
                 :source-paths [\"src\"]
                 :antora-start-path \"doc\"
@@ -14,9 +14,9 @@
                 :git-branch \"main\"})"
   (:require [babashka.pods :as pods]
             [babashka.fs :as fs]
-            [babashka.process :as p]
             [clojure.edn :as edn]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [ol.bb-tasks.util :as util]))
 
 ;; Pod must also be declared in consuming project's bb.edn:
 ;;   :pods {clj-kondo/clj-kondo {:version "2026.01.19"}}
@@ -354,31 +354,27 @@
 
 ;; -- Public API ---------------------------------------------------------------
 
-(defn- current-git-branch
-  "Detect the current git branch name."
-  []
-  (str/trim (:out (p/shell {:out :string} "git rev-parse --abbrev-ref HEAD"))))
-
 (defn generate!
   "Generate AsciiDoc API reference pages from Clojure source.
 
-  opts is a map with keys:
-    :project-root      -- absolute path to the project root (default \".\")
-    :source-paths      -- vector of source paths relative to project-root (default [\"src\"])
-    :antora-start-path -- path to the Antora component root (e.g. \"doc\")
-    :github-repo       -- GitHub repo URL (e.g. \"https://github.com/org/repo\")
-    :git-branch        -- git branch for source links (auto-detected if omitted)"
+  All options have smart defaults:
+    :project-root      -- default \".\"
+    :source-paths      -- default from deps.edn :paths, fallback [\"src\"]
+    :antora-start-path -- default \"doc\"
+    :github-repo       -- default from git remote (upstream > origin)
+    :git-branch        -- default from current git branch"
   [opts]
-  (assert (:antora-start-path opts) ":antora-start-path is required")
-  (assert (:github-repo opts) ":github-repo is required")
-
   (let [project-root (str (fs/absolutize (or (:project-root opts) ".")))
-        source-paths (mapv #(str (fs/path project-root %)) (or (:source-paths opts) ["src"]))
-        antora-module-root (str (fs/path project-root (:antora-start-path opts) "modules" "ROOT"))
+        source-paths (mapv #(str (fs/path project-root %))
+                           (or (:source-paths opts)
+                               (util/source-paths-from-deps-edn project-root)))
+        antora-start-path (or (:antora-start-path opts) "doc")
+        antora-module-root (str (fs/path project-root antora-start-path "modules" "ROOT"))
         pages-dir (str (fs/path antora-module-root "pages" "api"))
         partials-dir (str (fs/path antora-module-root "partials"))
-        github-repo (:github-repo opts)
-        git-branch (or (:git-branch opts) (current-git-branch))]
+        github-repo (or (:github-repo opts) (util/github-repo-from-remote))
+        git-branch (or (:git-branch opts) (util/current-git-branch))]
+    (assert github-repo "Could not detect :github-repo from git remotes. Pass it explicitly.")
 
     (println "Analyzing" (str/join ", " source-paths) "...")
 
