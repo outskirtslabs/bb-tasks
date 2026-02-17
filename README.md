@@ -12,6 +12,10 @@ Generates AsciiDoc API reference pages from Clojure source using clj-kondo stati
 
 Syncs a project's `README.adoc` as its Antora index page, rewriting relative doc links to Antora xrefs.
 
+### gen-manifest
+
+Generates `<antora-start-path>/manifest.edn` from `deps.edn` `[:aliases :neil :project]` metadata and `doc/antora.yml`.
+
 ## Setup
 
 Add bb-tasks as a git dependency in your project's `bb.edn`:
@@ -23,6 +27,7 @@ Add bb-tasks as a git dependency in your project's `bb.edn`:
  :pods {clj-kondo/clj-kondo {:version "2026.01.19"}}
  :tasks
  {:requires ([ol.bb-tasks.gen-api-docs :as gen-api]
+             [ol.bb-tasks.gen-manifest :as gen-manifest]
              [ol.bb-tasks.sync-readme :as sync-readme])
   sync-readme
   {:doc "Sync README.adoc as Antora index page"
@@ -33,7 +38,10 @@ Add bb-tasks as a git dependency in your project's `bb.edn`:
                              :source-paths ["src"]
                              :antora-start-path "doc"
                              :github-repo "https://github.com/your-org/your-repo"
-                             :git-branch "main"})}}}
+                             :git-branch "main"})}
+  gen-manifest
+  {:doc "Generate doc/manifest.edn"
+   :task (gen-manifest/generate! {:antora-start-path "doc"})}}}
 ```
 
 The clj-kondo pod declaration is required in the consuming project's `bb.edn` -- pods cannot be transitively loaded from dependencies.
@@ -59,6 +67,16 @@ The clj-kondo pod declaration is required in the consuming project's `bb.edn` --
 | `:readme-path` | Path to the README file (default `"README.adoc"`) |
 | `:antora-start-path` | Path to the Antora component root (default `"doc"`) |
 
+## gen-manifest options
+
+`generate!` accepts a map with:
+
+| Key | Description |
+|-----|-------------|
+| `:project-root` | Absolute or relative path to the project root (default `"."`) |
+| `:antora-start-path` | Path to the Antora component root (default `"doc"`) |
+| `:github-repo` | Optional explicit GitHub repo URL override |
+
 ## Output
 
 gen-api-docs produces (for each public namespace, excluding `:no-doc` and `:skip-wiki`):
@@ -71,6 +89,31 @@ The `pages/api/` directory is cleared before each run to remove stale pages.
 sync-readme produces:
 
 - `<antora-start-path>/modules/ROOT/pages/index.adoc` -- copy of README.adoc with rewritten links
+
+gen-manifest produces:
+
+- `<antora-start-path>/manifest.edn` -- normalized project metadata consumed by docs aggregation
+
+Required metadata in `deps.edn`:
+
+```clojure
+{:aliases
+ {:neil
+  {:project
+   {:name "com.outskirtslabs/your-lib"
+    :description "..."
+    :license {:id "MIT"} ; SPDX identifier
+    :platforms [:clj :bb]
+    :status :maturing}}}}
+```
+
+Allowed status values:
+
+- `:experimental`
+- `:maturing`
+- `:stable`
+- `:retired`
+- `:static`
 
 ## License
 

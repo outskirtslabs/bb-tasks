@@ -10,6 +10,7 @@
     bb gen-docs"
   (:require [ol.bb-tasks.sync-readme :as sync-readme]
             [ol.bb-tasks.gen-api-docs :as gen-api-docs]
+            [ol.bb-tasks.gen-manifest :as gen-manifest]
             [clojure.edn :as edn]))
 
 (defn generate!
@@ -25,7 +26,8 @@
   ([] (generate! {}))
   ([opts]
    (sync-readme/sync! opts)
-   (gen-api-docs/generate! opts)))
+   (gen-api-docs/generate! opts)
+   (gen-manifest/generate! opts)))
 
 (defn -main [& args]
   (generate! (if (seq args)

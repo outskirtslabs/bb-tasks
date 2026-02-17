@@ -372,8 +372,8 @@
         antora-module-root (str (fs/path project-root antora-start-path "modules" "ROOT"))
         pages-dir (str (fs/path antora-module-root "pages" "api"))
         partials-dir (str (fs/path antora-module-root "partials"))
-        github-repo (or (:github-repo opts) (util/github-repo-from-remote))
-        git-branch (or (:git-branch opts) (util/current-git-branch))]
+        github-repo (or (:github-repo opts) (util/github-repo-from-remote project-root))
+        git-branch (or (:git-branch opts) (util/current-git-branch project-root))]
     (assert github-repo "Could not detect :github-repo from git remotes. Pass it explicitly.")
 
     (println "Analyzing" (str/join ", " source-paths) "...")

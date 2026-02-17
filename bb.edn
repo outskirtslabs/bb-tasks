@@ -8,6 +8,9 @@
   sync-readme
   {:doc "Sync README.adoc as Antora index page. Pass EDN opts string as argument."
    :task ol.bb-tasks.sync-readme/-main}
+  gen-manifest
+  {:doc "Generate doc/manifest.edn from deps.edn and antora.yml metadata. Pass EDN opts string as argument."
+   :task ol.bb-tasks.gen-manifest/-main}
   gen-docs
-  {:doc "Generate all Antora docs (sync-readme + gen-api-docs). Pass EDN opts string as argument."
+  {:doc "Generate all Antora docs (sync-readme + gen-api-docs + gen-manifest). Pass EDN opts string as argument."
    :task ol.bb-tasks.gen-docs/-main}}}
