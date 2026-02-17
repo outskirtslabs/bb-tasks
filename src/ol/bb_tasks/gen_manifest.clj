@@ -115,12 +115,12 @@
          manifest-file (str (fs/path project-root antora-start-path "manifest.edn"))
          project (load-neil-project deps-file)
          antora (load-antora-config antora-file)
-         project-name (normalize-name (:name project))
+         project-coord (normalize-name (:name project))
          license-id (get-in project [:license :id])
          platforms (normalize-platforms (:platforms project))
          status (normalize-status (:status project))
          repo-url (or (:github-repo opts) (util/github-repo-from-remote project-root))]
-     (ensure! (string? project-name)
+     (ensure! (string? project-coord)
               "Missing required key [:aliases :neil :project :name] in deps.edn"
               {:file deps-file})
      (ensure! (string? (:description project))
@@ -144,7 +144,7 @@
 
      (let [manifest {:manifest/version 1
                      :project {:id (:name antora)
-                               :name project-name
+                               :coord project-coord
                                :description (:description project)
                                :license license-id
                                :platforms platforms

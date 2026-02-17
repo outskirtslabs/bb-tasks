@@ -94,6 +94,11 @@ gen-manifest produces:
 
 - `<antora-start-path>/manifest.edn` -- normalized project metadata consumed by docs aggregation
 
+Manifest `:project` contains:
+
+- `:id` from `doc/antora.yml` component name.
+- `:coord` from `deps.edn` `[:aliases :neil :project :name]` (group/artifact coordinate).
+
 Required metadata in `deps.edn`:
 
 ```clojure
