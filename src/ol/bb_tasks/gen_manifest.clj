@@ -99,6 +99,20 @@
     (string? status) (keyword status)
     :else status))
 
+(defn- normalize-created
+  [created]
+  (cond
+    (string? created) created
+    :else created))
+
+(defn- valid-iso-date?
+  [s]
+  (try
+    (java.time.LocalDate/parse s)
+    true
+    (catch Exception _
+      false)))
+
 (defn generate!
   "Generate `<antora-start-path>/manifest.edn` from deps.edn and doc/antora.yml.
 
@@ -119,6 +133,7 @@
          license-id (get-in project [:license :id])
          platforms (normalize-platforms (:platforms project))
          status (normalize-status (:status project))
+         created (normalize-created (:created project))
          repo-url (or (:github-repo opts) (util/github-repo-from-remote project-root))]
      (ensure! (string? project-coord)
               "Missing required key [:aliases :neil :project :name] in deps.edn"
@@ -138,6 +153,12 @@
      (ensure! (contains? allowed-statuses status)
               (str "Project :status must be one of " (sort allowed-statuses))
               {:file deps-file :status status})
+     (ensure! (string? created)
+              "Missing required key [:aliases :neil :project :created] in deps.edn"
+              {:file deps-file})
+     (ensure! (valid-iso-date? created)
+              "Project :created must be an ISO-8601 date (YYYY-MM-DD)"
+              {:file deps-file :created created})
      (ensure! (string? repo-url)
               "Could not detect GitHub repo URL from git remotes; pass :github-repo in opts"
               {:project-root project-root})
@@ -149,6 +170,7 @@
                                :license license-id
                                :platforms platforms
                                :status status
+                               :created created
                                :version (:version project)}
                      :docs {:component (:name antora)
                             :title (:title antora)

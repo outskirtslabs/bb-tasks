@@ -98,6 +98,7 @@ Manifest `:project` contains:
 
 - `:id` from `doc/antora.yml` component name.
 - `:coord` from `deps.edn` `[:aliases :neil :project :name]` (group/artifact coordinate).
+- `:created` from `deps.edn` `[:aliases :neil :project :created]` (ISO date `YYYY-MM-DD`).
 
 Required metadata in `deps.edn`:
 
@@ -109,6 +110,7 @@ Required metadata in `deps.edn`:
     :description "..."
     :license {:id "MIT"} ; SPDX identifier
     :platforms [:clj :bb]
+    :created "2026-02-16"
     :status :maturing}}}}
 ```
 
