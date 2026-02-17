@@ -328,29 +328,72 @@
               (cons entry (render-nav-tree child (inc depth)))))
           sorted-children)))))
 
-(defn- render-nav [kept-ns-defs]
+(defn- namespace-nav-lines [kept-ns-defs]
   (if (empty? kept-ns-defs)
-    ".API Reference\n"
+    []
     (let [all-segments (mapv #(ns-segments (:name %)) kept-ns-defs)
           common-prefix (longest-common-prefix-segments all-segments)
           trie (build-ns-trie kept-ns-defs common-prefix)]
       (if (empty? common-prefix)
-        (let [lines (render-nav-tree trie 1)]
-          (str ".API Reference\n"
-               (str/join "\n" lines) "\n"))
+        (or (render-nav-tree trie 1) [])
         (let [prefix-str (str/join "." common-prefix)]
           (if (and (empty? (:children trie)) (:ns-def trie))
             (let [slug (ns->slug (:name (:ns-def trie)))]
-              (str ".API Reference\n"
-                   "* xref:api/" slug ".adoc[" prefix-str "]\n"))
+              [(str "* xref:api/" slug ".adoc[" prefix-str "]")])
             (let [root-line (if (:ns-def trie)
                               (let [slug (ns->slug (:name (:ns-def trie)))]
                                 (str "* xref:api/" slug ".adoc[" prefix-str "]"))
                               (str "* " prefix-str))
-                  children-lines (render-nav-tree trie 2)]
-              (str ".API Reference\n"
-                   root-line "\n"
-                   (str/join "\n" children-lines) "\n"))))))))
+                  children-lines (or (render-nav-tree trie 2) [])]
+              (vec (cons root-line children-lines)))))))))
+
+(defn- render-nav [kept-ns-defs]
+  (let [lines (namespace-nav-lines kept-ns-defs)
+        nested-lines (map #(str "*" %) lines)]
+    (str "* xref:api.adoc[API Reference]\n"
+         (when (seq nested-lines)
+           (str (str/join "\n" nested-lines) "\n")))))
+
+(defn- doc-summary [doc-str]
+  (when doc-str
+    (let [normalized (->> (str/split-lines doc-str)
+                          (map str/trim)
+                          (remove str/blank?)
+                          (str/join " ")
+                          (#(str/replace % #"\s+" " "))
+                          str/trim)
+          first-sentence (some-> (re-find #"(?s)^(.+?\.)" normalized)
+                                 second
+                                 str/trim)]
+      (not-empty first-sentence))))
+
+(defn- escape-table-cell [s]
+  (-> s
+      (str/replace "|" "\\|")
+      (str/replace #"\n" " ")))
+
+(defn- render-api-index-page [kept-ns-defs]
+  (if (empty? kept-ns-defs)
+    "= API Reference\n\nNo public namespaces were found for this component version.\n"
+    (let [ns-count (count kept-ns-defs)
+          rows (->> kept-ns-defs
+                    (map (fn [ns-def]
+                           (let [ns-name (str (:name ns-def))
+                                 slug (ns->slug (:name ns-def))
+                                 summary (or (doc-summary (:doc ns-def))
+                                             "-")]
+                             (str "| xref:api/" slug ".adoc[`" ns-name "`]\n"
+                                  "| " (escape-table-cell summary)))))
+                    (str/join "\n\n"))]
+      (str "= API Reference\n\n"
+           "This release publishes " ns-count " namespace"
+           (when (not= ns-count 1) "s")
+           ".\n\n"
+           "[cols=\"1,3\",options=\"header\",stripes=hover]\n"
+           "|===\n"
+           "| Namespace | Summary\n\n"
+           rows "\n\n"
+           "|===\n"))))
 
 ;; -- Public API ---------------------------------------------------------------
 
@@ -370,6 +413,8 @@
                                (util/source-paths-from-deps-edn project-root)))
         antora-start-path (or (:antora-start-path opts) "doc")
         antora-module-root (str (fs/path project-root antora-start-path "modules" "ROOT"))
+        api-index-file (str (fs/path antora-module-root "pages" "api.adoc"))
+        api-dir-index-file (str (fs/path antora-module-root "pages" "api" "index.adoc"))
         pages-dir (str (fs/path antora-module-root "pages" "api"))
         partials-dir (str (fs/path antora-module-root "partials"))
         github-repo (or (:github-repo opts) (util/github-repo-from-remote project-root))
@@ -416,6 +461,13 @@
               content (render-ns-page ns-def vars vars-by-ns kept-ns-defs github-repo git-branch project-root)]
           (println "  Writing" file)
           (spit file content)))
+
+      ;; Write API landing page
+      (let [content (render-api-index-page kept-ns-defs)]
+        (println "  Writing" api-index-file)
+        (spit api-index-file content)
+        (println "  Writing" api-dir-index-file)
+        (spit api-dir-index-file content))
 
       ;; Write nav partial
       (let [nav-file (str (fs/path partials-dir "api-nav.adoc"))
