@@ -10,7 +10,12 @@ Generates AsciiDoc API reference pages from Clojure source using clj-kondo stati
 
 ### sync-readme
 
-Syncs a project's `README.adoc` as its Antora index page, rewriting relative doc links to Antora xrefs. If present, it also syncs `CHANGELOG.adoc`, `CONTRIBUTING.adoc`, and `SECURITY.adoc` into Antora pages.
+Syncs a project's README as its Antora index page, rewriting relative doc links to Antora xrefs. If present, it also syncs `CHANGELOG.adoc`, `CONTRIBUTING.adoc`, and `SECURITY.adoc` into Antora pages.
+
+`sync-readme` supports both:
+
+- `README.adoc` (copied directly)
+- `README.md` (converted via `pandoc -f gfm -t asciidoc --shift-heading-level-by=-1`)
 
 ### gen-manifest
 
@@ -30,7 +35,7 @@ Add bb-tasks as a git dependency in your project's `bb.edn`:
              [ol.bb-tasks.gen-manifest :as gen-manifest]
              [ol.bb-tasks.sync-readme :as sync-readme])
   sync-readme
-  {:doc "Sync README.adoc as Antora index page"
+  {:doc "Sync README as Antora index page"
    :task (sync-readme/sync! {:antora-start-path "doc"})}
   gen-api-docs
   {:doc "Generate API docs"
@@ -64,11 +69,20 @@ The clj-kondo pod declaration is required in the consuming project's `bb.edn` --
 
 | Key | Description |
 |-----|-------------|
-| `:readme-path` | Path to the README file (default `"README.adoc"`) |
+| `:readme-path` | Path to the README file (default `"README.adoc"`). Markdown (`.md`) is converted with pandoc. |
 | `:changelog-path` | Optional path to changelog file (default `"CHANGELOG.adoc"`) |
 | `:contributing-path` | Optional path to contributing file (default `"CONTRIBUTING.adoc"`) |
 | `:security-path` | Optional path to security file (default `"SECURITY.adoc"`) |
 | `:antora-start-path` | Path to the Antora component root (default `"doc"`) |
+
+For non-Clojure repos that keep `README.md` as source:
+
+```clojure
+sync-readme
+{:doc "Sync markdown README and optional docs into Antora pages"
+ :task (sync-readme/sync! {:antora-start-path "doc"
+                           :readme-path "README.md"})}
+```
 
 ## gen-manifest options
 
