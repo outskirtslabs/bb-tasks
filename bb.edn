@@ -6,7 +6,10 @@
   {:doc "Generate AsciiDoc API docs. Pass EDN opts string as argument."
    :task ol.bb-tasks.gen-api-docs/-main}
   sync-readme
-  {:doc "Sync README (.adoc or .md) as Antora index page. Pass EDN opts string as argument."
+  {:doc "Sync README.adoc as Antora index page. Pass EDN opts string as argument."
+   :task ol.bb-tasks.sync-readme/-main}
+  sync-top-level-docs
+  {:doc "Sync top-level AsciiDoc docs (README/CHANGELOG/CONTRIBUTING/SECURITY) into Antora pages. Pass EDN opts string as argument."
    :task ol.bb-tasks.sync-readme/-main}
   gen-manifest
   {:doc "Generate doc/manifest.edn from deps.edn and antora.yml metadata. Pass EDN opts string as argument."
