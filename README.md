@@ -10,7 +10,7 @@ Generates AsciiDoc API reference pages from Clojure source using clj-kondo stati
 
 ### sync-readme
 
-Syncs a project's `README.adoc` as its Antora index page, rewriting relative doc links to Antora xrefs.
+Syncs a project's `README.adoc` as its Antora index page, rewriting relative doc links to Antora xrefs. If present, it also syncs `CHANGELOG.adoc`, `CONTRIBUTING.adoc`, and `SECURITY.adoc` into Antora pages.
 
 ### gen-manifest
 
@@ -65,6 +65,9 @@ The clj-kondo pod declaration is required in the consuming project's `bb.edn` --
 | Key | Description |
 |-----|-------------|
 | `:readme-path` | Path to the README file (default `"README.adoc"`) |
+| `:changelog-path` | Optional path to changelog file (default `"CHANGELOG.adoc"`) |
+| `:contributing-path` | Optional path to contributing file (default `"CONTRIBUTING.adoc"`) |
+| `:security-path` | Optional path to security file (default `"SECURITY.adoc"`) |
 | `:antora-start-path` | Path to the Antora component root (default `"doc"`) |
 
 ## gen-manifest options
@@ -89,6 +92,9 @@ The `pages/api/` directory is cleared before each run to remove stale pages.
 sync-readme produces:
 
 - `<antora-start-path>/modules/ROOT/pages/index.adoc` -- copy of README.adoc with rewritten links
+- `<antora-start-path>/modules/ROOT/pages/changelog.adoc` -- copy of CHANGELOG.adoc (if present)
+- `<antora-start-path>/modules/ROOT/pages/contributing.adoc` -- copy of CONTRIBUTING.adoc (if present)
+- `<antora-start-path>/modules/ROOT/pages/security.adoc` -- copy of SECURITY.adoc (if present)
 
 gen-manifest produces:
 

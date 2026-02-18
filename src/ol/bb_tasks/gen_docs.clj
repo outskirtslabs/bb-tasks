@@ -1,7 +1,7 @@
 (ns ol.bb-tasks.gen-docs
   "Orchestrates all Antora documentation generation tasks.
 
-  Runs sync-readme and gen-api-docs in sequence.
+  Runs sync-readme, gen-api-docs, and gen-manifest in sequence.
   All options have smart defaults -- typically no arguments are needed:
 
     (generate! {})
@@ -14,7 +14,7 @@
             [clojure.edn :as edn]))
 
 (defn generate!
-  "Generate all Antora documentation: sync README + generate API docs.
+  "Generate all Antora documentation: sync docs + generate API docs + manifest.
 
   All options have smart defaults:
     :project-root      -- default \".\"
