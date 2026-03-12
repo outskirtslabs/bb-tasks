@@ -42,6 +42,80 @@
       (and (= 'clojure.core/deftype (:defined-by v))
            (nil? (:arglist-strs v)))))
 
+;; -- Variant merging ----------------------------------------------------------
+
+(def ^:private lang-priority
+  {:clj 0
+   :cljs 1
+   :cljd 2})
+
+(defn- lang-sort-key
+  [lang]
+  (get lang-priority lang 99))
+
+(defn- sort-platforms
+  [langs]
+  (->> langs
+       distinct
+       (sort-by lang-sort-key)
+       vec))
+
+(defn- platform-label
+  [platforms]
+  (str/join ", " (map name platforms)))
+
+(defn- variant-groups
+  [entries signature-fn]
+  (->> entries
+       (group-by signature-fn)
+       vals
+       (map (fn [variants]
+              (let [sorted (sort-by #(vector (lang-sort-key (:lang %))
+                                             (:row %)
+                                             (:filename %))
+                                    variants)
+                    base (first sorted)]
+                (assoc base
+                       :variants sorted
+                       :platforms (sort-platforms (keep :lang sorted))))))
+       (sort-by #(vector (lang-sort-key (first (:platforms %)))
+                         (:row %)
+                         (:filename %)))
+       vec))
+
+(defn- merge-by-identity
+  [entries identity-fn signature-fn sort-fn]
+  (->> entries
+       (group-by identity-fn)
+       vals
+       (map (fn [variants]
+              (let [groups (variant-groups variants signature-fn)
+                    primary (first groups)]
+                (assoc primary
+                       :variant-groups groups
+                       :platforms (sort-platforms (mapcat :platforms groups))))))
+       sort-fn
+       vec))
+
+(defn- ns-variant-signature
+  [ns-def]
+  (select-keys ns-def [:doc :filename :row :end-row :meta]))
+
+(defn- var-variant-signature
+  [v]
+  (select-keys v [:doc :arglist-strs :filename :row :end-row :meta :defined-by :deprecated]))
+
+(defn- merge-ns-defs
+  [ns-defs]
+  (merge-by-identity ns-defs :name ns-variant-signature #(sort-by :name %)))
+
+(defn- merge-var-defs
+  [var-defs]
+  (merge-by-identity var-defs
+                     (juxt :ns :name)
+                     var-variant-signature
+                     #(sort-by (juxt :ns :row :name) %)))
+
 ;; -- Protocol member grouping -------------------------------------------------
 
 (defn- protocol-var? [v]
@@ -200,26 +274,77 @@
     (when (seq parts)
       (str "_" (str/join " | " parts) "_"))))
 
+(defn- variant-doc-str
+  [variant current-ns vars-by-ns kept-ns-defs]
+  (when-let [doc (:doc variant)]
+    (process-docstring doc current-ns vars-by-ns (map :name kept-ns-defs))))
+
+(defn- source-links
+  [variant-group github-repo git-branch project-root]
+  (->> (:variants variant-group)
+       (map (fn [variant]
+              {:platform (:lang variant)
+               :url (source-url github-repo git-branch project-root variant)}))
+       distinct))
+
+(defn- render-source-links
+  [variant-group github-repo git-branch project-root]
+  (let [links (source-links variant-group github-repo git-branch project-root)]
+    (cond
+      (empty? links)
+      nil
+
+      (= 1 (count links))
+      (str "[.api-source]\nlink:" (:url (first links)) "[source,window=_blank]")
+
+      :else
+      (str "[.api-source]\n"
+           (str/join " +\n"
+                     (map (fn [{:keys [platform url]}]
+                            (str (name platform) ": "
+                                 "link:" url "[source,window=_blank]"))
+                          links))))))
+
+(defn- render-platform-line
+  [platforms]
+  (when (seq platforms)
+    (str "_platforms: " (platform-label platforms) "_")))
+
+(defn- render-entry-variant-group
+  [heading-level heading name-str variant current-ns vars-by-ns kept-ns-defs github-repo git-branch project-root]
+  (str/join "\n"
+            (filterv some?
+                     [(when heading
+                        (str "[discrete]\n" heading-level " " heading))
+                      ""
+                      (render-platform-line (:platforms variant))
+                      ""
+                      (render-arglists-block name-str (:arglist-strs variant))
+                      ""
+                      (variant-doc-str variant current-ns vars-by-ns kept-ns-defs)
+                      ""
+                      (render-source-links variant github-repo git-branch project-root)])))
+
 (defn- render-var-entry [v current-ns vars-by-ns kept-ns-defs github-repo git-branch project-root]
   (let [anchor (var->anchor (str (:name v)))
         name-str (str (:name v))
-        arglists (:arglist-strs v)
-        doc-str (when (:doc v)
-                  (process-docstring (:doc v) current-ns vars-by-ns (map :name kept-ns-defs)))
         meta-line (render-meta-line v)
-        src-link (str "[.api-source]\nlink:" (source-url github-repo git-branch project-root v) "[source,window=_blank]")]
+        variant-groups (or (:variant-groups v) [(assoc v :variants [v] :platforms (sort-platforms [(:lang v)]))])
+        body (if (= 1 (count variant-groups))
+               (render-entry-variant-group nil nil name-str (first variant-groups)
+                                           current-ns vars-by-ns kept-ns-defs github-repo git-branch project-root)
+               (str/join "\n\n"
+                         (map #(render-entry-variant-group "===" (platform-label (:platforms %)) name-str %
+                                                           current-ns vars-by-ns kept-ns-defs github-repo git-branch project-root)
+                              variant-groups)))]
     (str/join "\n"
               (filterv some?
                        [(str "[#" anchor "]")
                         (str "== " name-str)
                         ""
-                        (render-arglists-block name-str arglists)
-                        ""
-                        doc-str
-                        ""
                         meta-line
                         ""
-                        src-link]))))
+                        body]))))
 
 (defn- render-protocol-member [m vars-by-ns kept-ns-defs]
   (let [anchor (var->anchor (str (:name m)))
@@ -262,17 +387,29 @@
 (defn- render-ns-page [ns-def vars vars-by-ns kept-ns-defs github-repo git-branch project-root]
   (let [ns-name (str (:name ns-def))
         grouped (group-protocol-members vars)
-        doc-str (when (:doc ns-def)
-                  (process-docstring (:doc ns-def) (:name ns-def) vars-by-ns (map :name kept-ns-defs)))
         meta-line (when (get-in ns-def [:meta :added])
                     (str "_added in " (get-in ns-def [:meta :added]) "_"))
+        variant-groups (or (:variant-groups ns-def) [(assoc ns-def :variants [ns-def] :platforms (sort-platforms [(:lang ns-def)]))])
+        docs-str (if (= 1 (count variant-groups))
+                   (let [variant (first variant-groups)]
+                     (str/join "\n"
+                               (filterv some?
+                                        [(render-platform-line (:platforms variant))
+                                         ""
+                                         (variant-doc-str variant (:name ns-def) vars-by-ns kept-ns-defs)])))
+                   (str/join "\n\n"
+                             (map (fn [variant]
+                                    (str "[discrete]\n=== " (platform-label (:platforms variant)) "\n\n"
+                                         (or (variant-doc-str variant (:name ns-def) vars-by-ns kept-ns-defs)
+                                             "")))
+                                  variant-groups)))
         entries (map (fn [v]
                        (if (= :protocol (:kind v))
                          (render-protocol-entry v (:name ns-def) vars-by-ns kept-ns-defs github-repo git-branch project-root)
                          (render-var-entry v (:name ns-def) vars-by-ns kept-ns-defs github-repo git-branch project-root)))
                      grouped)]
     (str "= " ns-name "\n"
-         (when doc-str (str "\n" doc-str "\n"))
+         (when (not (str/blank? docs-str)) (str "\n" docs-str "\n"))
          (when meta-line (str "\n" meta-line "\n"))
          "\n"
          (str/join "\n\n'''\n\n" entries)
@@ -429,23 +566,19 @@
                                             :output {:analysis
                                                      {:arglists true
                                                       :var-definitions {:meta [:no-doc :skip-wiki :arglists]}
-                                                      :namespace-definitions {:meta [:no-doc :skip-wiki]}}}}})]
+                                             :namespace-definitions {:meta [:no-doc :skip-wiki]}}}}})]
                      (:analysis result))
-          ns-defs (:namespace-definitions analysis)
-          var-defs (:var-definitions analysis)
-          kept-ns-names (->> ns-defs
+          raw-ns-defs (:namespace-definitions analysis)
+          raw-var-defs (:var-definitions analysis)
+          kept-ns-defs (->> raw-ns-defs
                              (remove skip-ns?)
-                             (map :name)
-                             set)
-          public-vars (->> var-defs
+                             merge-ns-defs)
+          kept-ns-names (set (map :name kept-ns-defs))
+          public-vars (->> raw-var-defs
                            (remove skip-var?)
                            (filter #(contains? kept-ns-names (:ns %)))
-                           (sort-by (juxt :ns :row)))
-          vars-by-ns (group-by :ns public-vars)
-          kept-ns-defs (->> ns-defs
-                            (remove skip-ns?)
-                            (filter #(contains? kept-ns-names (:name %)))
-                            (sort-by :name))]
+                           merge-var-defs)
+          vars-by-ns (group-by :ns public-vars)]
 
       ;; Clean up old generated files
       (when (fs/exists? pages-dir)
