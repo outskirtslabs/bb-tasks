@@ -16,6 +16,10 @@ Syncs a project's `README.adoc` as its Antora index page, rewriting relative doc
 
 Alias task for non-Clojure repos that only need top-level AsciiDoc docs synced into the Antora tree (`README.adoc`, optional `CHANGELOG.adoc`, `CONTRIBUTING.adoc`, `SECURITY.adoc`).
 
+### publish-clojars
+
+Prompts for a Clojars deploy token, exports `CLOJARS_USERNAME` and `CLOJARS_PASSWORD`, then runs `clojure -T:build deploy`.
+
 ### gen-manifest
 
 Generates `<antora-start-path>/manifest.edn` from `deps.edn` `[:aliases :neil :project]` metadata and `doc/antora.yml`.
@@ -32,6 +36,7 @@ Add bb-tasks as a git dependency in your project's `bb.edn`:
  :tasks
  {:requires ([ol.bb-tasks.gen-api-docs :as gen-api]
              [ol.bb-tasks.gen-manifest :as gen-manifest]
+             [ol.bb-tasks.publish-clojars :as publish-clojars]
              [ol.bb-tasks.sync-readme :as sync-readme])
   sync-readme
   {:doc "Sync README.adoc as Antora index page"
@@ -45,7 +50,11 @@ Add bb-tasks as a git dependency in your project's `bb.edn`:
                              :git-branch "main"})}
   gen-manifest
   {:doc "Generate doc/manifest.edn"
-   :task (gen-manifest/generate! {:antora-start-path "doc"})}}}
+   :task (gen-manifest/generate! {:antora-start-path "doc"})}
+  publish
+  {:doc "Publish the jar to Clojars"
+   :depends [jar]
+   :task (publish-clojars/publish!)}}}
 ```
 
 The clj-kondo pod declaration is required in the consuming project's `bb.edn` -- pods cannot be transitively loaded from dependencies.
@@ -91,6 +100,18 @@ sync-top-level-docs
 | `:project-root` | Absolute or relative path to the project root (default `"."`) |
 | `:antora-start-path` | Path to the Antora component root (default `"doc"`) |
 | `:github-repo` | Optional explicit GitHub repo URL override |
+
+## publish-clojars options
+
+`publish!` accepts a map with:
+
+| Key | Description |
+|-----|-------------|
+| `:project-root` | Directory to run the deploy command from (default `"."`) |
+| `:username` | Clojars username (default `"ramblurr"`) |
+| `:token` | Optional deploy token override. If omitted, bb-tasks prompts for it |
+| `:prompt` | Prompt string shown when asking for the token |
+| `:command` | Command vector to run instead of `["clojure" "-T:build" "deploy"]` |
 
 ## Output
 

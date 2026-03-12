@@ -11,6 +11,9 @@
   sync-top-level-docs
   {:doc "Sync top-level AsciiDoc docs (README/CHANGELOG/CONTRIBUTING/SECURITY) into Antora pages. Pass EDN opts string as argument."
    :task ol.bb-tasks.sync-readme/-main}
+  publish-clojars
+  {:doc "Prompt for a Clojars token and run clojure -T:build deploy. Pass EDN opts string as argument."
+   :task ol.bb-tasks.publish-clojars/-main}
   gen-manifest
   {:doc "Generate doc/manifest.edn from deps.edn and antora.yml metadata. Pass EDN opts string as argument."
    :task ol.bb-tasks.gen-manifest/-main}
