@@ -189,6 +189,82 @@
                        (fn [[_ body]]
                          (str "----\n" (str/trimr body) "\n----"))))))
 
+(def ^:private md-table-row-re
+  #"^\s*\|.*\|\s*$")
+
+(def ^:private md-table-separator-re
+  #"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
+
+(defn- md-table-row?
+  [line]
+  (boolean (re-matches md-table-row-re line)))
+
+(defn- md-table-separator-row?
+  [line]
+  (boolean (re-matches md-table-separator-re line)))
+
+(defn- split-md-table-row
+  [line]
+  (let [trimmed (str/trim line)
+        cells (subs trimmed 1 (dec (count trimmed)))]
+    (mapv str/trim (str/split cells #"(?<!\\)\|"))))
+
+(defn- render-asciidoc-table
+  [rows]
+  (str "[options=\"header\"]\n"
+       "|===\n"
+       (str/join "\n" (map #(str "| " (str/join " | " %)) rows))
+       "\n|==="))
+
+(defn- convert-md-tables
+  "Convert markdown pipe tables to AsciiDoc tables.
+
+   Only converts canonical GFM-style tables with:
+   - a header row
+   - a separator row containing dashes / alignment markers
+   - zero or more contiguous body rows
+
+   Listing blocks delimited by ---- are left untouched."
+  [s]
+  (if (nil? s) ""
+      (let [lines (str/split s #"\n" -1)
+            line-count (count lines)]
+        (loop [idx 0
+               in-listing? false
+               out []]
+          (if (>= idx line-count)
+            (str/join "\n" out)
+            (let [line (nth lines idx)]
+              (cond
+                (= "----" line)
+                (recur (inc idx) (not in-listing?) (conj out line))
+
+                in-listing?
+                (recur (inc idx) in-listing? (conj out line))
+
+                (and (< (inc idx) line-count)
+                     (md-table-row? line)
+                     (md-table-separator-row? (nth lines (inc idx))))
+                (let [header (split-md-table-row line)
+                      [table-lines next-idx]
+                      (loop [table-lines [line]
+                             row-idx (+ idx 2)]
+                        (if (and (< row-idx line-count)
+                                 (md-table-row? (nth lines row-idx))
+                                 (not (md-table-separator-row? (nth lines row-idx))))
+                          (recur (conj table-lines (nth lines row-idx)) (inc row-idx))
+                          [table-lines row-idx]))
+                      rows (mapv split-md-table-row table-lines)
+                      consistent-width? (every? #(= (count header) (count %)) rows)]
+                  (if consistent-width?
+                    (recur next-idx in-listing? (conj out (render-asciidoc-table rows)))
+                    (recur next-idx
+                           in-listing?
+                           (into out (subvec lines idx next-idx)))))
+
+                :else
+                (recur (inc idx) in-listing? (conj out line)))))))))
+
 (defn- resolve-var-references
   "Resolve [[var-name]] wikilink patterns to AsciiDoc xrefs."
   [s current-ns all-vars-by-ns all-ns-names]
@@ -238,6 +314,7 @@
 (defn- process-docstring [s current-ns all-vars-by-ns all-ns-names]
   (-> s
       (convert-fenced-code-blocks)
+      (convert-md-tables)
       (convert-md-headings)
       (resolve-var-references current-ns all-vars-by-ns all-ns-names)
       (str/replace #"(?m)^  " "")))

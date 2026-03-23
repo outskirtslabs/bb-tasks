@@ -93,3 +93,42 @@
       (is (str/includes? page "=== cljs"))
       (is (str/includes? page "JVM variant."))
       (is (str/includes? page "Node variant.")))))
+
+(deftest process-docstring-converts-markdown-pipe-tables
+  (let [docstring (str "Before table.\n\n"
+                       "| key | description |\n"
+                       "|-----|-------------|\n"
+                       "| `:max-tokens` | Requested output cap. |\n"
+                       "| `:temperature` | Sampling temperature. |\n\n"
+                       "After table.")
+        rendered (#'sut/process-docstring docstring 'ol.llx.ai {} [])]
+    (is (str/includes? rendered "Before table.\n\n[options=\"header\"]\n|===\n| key | description"))
+    (is (str/includes? rendered "| `:max-tokens` | Requested output cap."))
+    (is (str/includes? rendered "| `:temperature` | Sampling temperature."))
+    (is (str/includes? rendered "|===\n\nAfter table."))
+    (is (not (str/includes? rendered "|-----|-------------|")))))
+
+(deftest process-docstring-keeps-fenced-pipe-tables-inside-code-blocks
+  (let [docstring (str "```md\n"
+                       "| key | description |\n"
+                       "|-----|-------------|\n"
+                       "| foo | bar |\n"
+                       "```\n")
+        rendered (#'sut/process-docstring docstring 'ol.llx.ai {} [])]
+    (is (str/includes? rendered "[source,md]\n----\n| key | description |\n|-----|-------------|\n| foo | bar |\n----"))
+    (is (not (str/includes? rendered "[options=\"header\"]")))))
+
+(deftest process-docstring-does-not-convert-non-table-pipe-text
+  (let [docstring (str "This line uses pipes but is not a table: a | b | c\n"
+                       "| still not |\n")
+        rendered (#'sut/process-docstring docstring 'ol.llx.ai {} [])]
+    (is (= docstring rendered))
+    (is (not (str/includes? rendered "|===")))))
+
+(deftest process-docstring-converts-tables-with-alignment-markers
+  (let [docstring (str "| key | description |\n"
+                       "|:----|------------:|\n"
+                       "| foo | bar |\n")
+        rendered (#'sut/process-docstring docstring 'ol.llx.ai {} [])]
+    (is (str/includes? rendered "[options=\"header\"]\n|===\n| key | description\n| foo | bar\n|==="))
+    (is (not (str/includes? rendered "|:----|------------:|")))))
